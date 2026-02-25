@@ -1,7 +1,7 @@
 import PDFDocument from "pdfkit";
 
-// ── Palette ──────────────────────────────────────────────────────────────────
-const COLORS = {
+// ── Design tokens ─────────────────────────────────────────────────────────────
+const C = {
     primary: "#4F46E5",
     dark: "#111827",
     muted: "#6B7280",
@@ -9,36 +9,30 @@ const COLORS = {
     yellow: "#CA8A04",
     red: "#DC2626",
     orange: "#EA580C",
-    sectionBg: "#F9FAFB",
+    bg: "#F9FAFB",
     border: "#E5E7EB",
 };
 
-const M = 50;        // page margin
-const CONTENT_W = 495; // A4 width (595) - 2 * M
+const M = 48;                      // left / right margin
+const CW = 595.28 - M * 2;         // usable content width ≈ 499 pts
+const FOOTER_Y = 810;               // footer starts here (A4 height ≈ 841)
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function scoreColor(s) {
-    if (s >= 75) return COLORS.green;
-    if (s >= 50) return COLORS.yellow;
-    return COLORS.red;
-}
-function scoreLabel(s) {
-    if (s >= 75) return "Strong";
-    if (s >= 50) return "Moderate";
-    return "Needs Work";
-}
+// Hard ceiling per section — guarantees the whole report fits on one page
+const MAX_ITEMS = 5;
+const MAX_KEYWORDS = 10;
+
+// ── Score helpers ─────────────────────────────────────────────────────────────
+const scoreColor = s => s >= 75 ? C.green : s >= 50 ? C.yellow : C.red;
+const scoreLabel = s => s >= 75 ? "Strong" : s >= 50 ? "Moderate" : "Needs Work";
 
 /**
- * Generate a formatted PDF for the given report and stream it to `dest`.
- * @param {object} report - Full report row from DB
- * @param {object} dest   - Node Writable (Express res)
+ * Generates a single-page PDF for the given report and pipes it to `dest`.
+ * Uses bufferPages so we can stamp the footer before flushing.
  */
 export const generateReportPDF = (report, dest) => {
-    // bufferPages = true: hold all pages in memory so we can stamp footers
-    // on ALL pages at once before flushing.
     const doc = new PDFDocument({
         size: "A4",
-        margins: { top: M, bottom: 80, left: M, right: M },
+        margins: { top: M, bottom: M, left: M, right: M },
         bufferPages: true,
         autoFirstPage: true,
     });
@@ -47,79 +41,74 @@ export const generateReportPDF = (report, dest) => {
 
     const isJD = report.analysis_type === "jd";
 
-    // ── Page 1: Header bar ───────────────────────────────────────────────────
-    doc.rect(0, 0, doc.page.width, 70).fill(COLORS.primary);
-    doc.fillColor("#fff").fontSize(22).font("Helvetica-Bold").text("ResumeIQ", M, 22);
-    doc.fontSize(10).font("Helvetica").text("AI-Powered Resume Analysis Report", M, 48);
-    doc.y = 80;
+    // ── Header bar ────────────────────────────────────────────────────────────
+    doc.rect(0, 0, 595.28, 64).fill(C.primary);
+    doc.fillColor("#fff").fontSize(20).font("Helvetica-Bold").text("ResumeIQ", M, 18);
+    doc.fontSize(9).font("Helvetica").text("AI-Powered Resume Analysis Report", M, 42);
+    doc.y = 72;
 
-    // ── Meta row ─────────────────────────────────────────────────────────────
-    const label = isJD ? "JD Match Analysis" : `Role: ${report.role ?? "General"}`;
-    const date = new Date(report.created_at).toLocaleDateString("en-IN", {
+    // ── Meta line ─────────────────────────────────────────────────────────────
+    const typeLabel = isJD ? "JD Match Analysis" : `Role: ${report.role ?? "General"}`;
+    const dateStr = new Date(report.created_at).toLocaleDateString("en-IN", {
         day: "numeric", month: "long", year: "numeric",
     });
-    doc.fillColor(COLORS.muted).fontSize(10).font("Helvetica")
-        .text(`${label}   ·   Generated on ${date}`, M, doc.y, { width: CONTENT_W });
+
+    doc.fillColor(C.muted).fontSize(9).font("Helvetica")
+        .text(`${typeLabel}   ·   ${dateStr}`, M, doc.y, { width: CW });
+    doc.moveDown(0.4);
+    doc.moveTo(M, doc.y).lineTo(M + CW, doc.y).strokeColor(C.border).lineWidth(0.5).stroke();
     doc.moveDown(0.6);
-    doc.moveTo(M, doc.y).lineTo(M + CONTENT_W, doc.y).strokeColor(COLORS.border).lineWidth(1).stroke();
-    doc.moveDown(0.8);
 
     // ── Score boxes ───────────────────────────────────────────────────────────
     const scoreY = doc.y;
-    const boxW = isJD ? (CONTENT_W - 12) / 2 : CONTENT_W;
+    const bw = isJD ? (CW - 10) / 2 : CW;  // box width
 
-    drawScoreBox(doc, M, scoreY, boxW, "ATS SCORE", report.score);
+    scoreBox(doc, M, scoreY, bw, "ATS SCORE", report.score);
     if (isJD && report.match_score != null) {
-        drawScoreBox(doc, M + boxW + 12, scoreY, boxW, "JD MATCH SCORE", report.match_score);
+        scoreBox(doc, M + bw + 10, scoreY, bw, "JD MATCH SCORE", report.match_score);
     }
 
-    doc.y = scoreY + 82;
-    doc.moveDown(1);
+    doc.y = scoreY + 58;
+    doc.moveDown(0.7);
 
     // ── Missing Keywords (JD only) ────────────────────────────────────────────
-    const keywords = Array.isArray(report.missing_keywords)
-        ? report.missing_keywords.filter(k => k && String(k).trim())
-        : [];
+    const keywords = (Array.isArray(report.missing_keywords) ? report.missing_keywords : [])
+        .filter(k => k && String(k).trim())
+        .slice(0, MAX_KEYWORDS);
 
     if (isJD && keywords.length > 0) {
-        ensureSpace(doc, 60);
-        doc.fillColor(COLORS.orange).fontSize(13).font("Helvetica-Bold")
-            .text("Missing Keywords", M, doc.y, { width: CONTENT_W });
-        doc.moveDown(0.4);
+        sectionTitle(doc, "Missing Keywords", C.orange);
+        doc.moveDown(0.3);
 
         let kx = M, ky = doc.y;
-        const chipH = 20, pad = 10, gap = 6;
-
-        // Set font first so widthOfString uses the right metrics
-        doc.font("Helvetica").fontSize(9);
+        doc.font("Helvetica").fontSize(8);
         keywords.forEach(kw => {
             const kwStr = String(kw);
-            const tw = doc.widthOfString(kwStr) + pad * 2;
-            if (kx + tw > M + CONTENT_W) { kx = M; ky += chipH + gap; }
-            doc.roundedRect(kx, ky, tw, chipH, 3).fillAndStroke("#FFF7ED", "#FDBA74");
-            doc.fillColor(COLORS.orange).font("Helvetica").fontSize(9)
-                .text(kwStr, kx + pad, ky + 5, { width: tw - pad * 2, lineBreak: false });
-            kx += tw + gap;
+            const tw = doc.widthOfString(kwStr) + 16;
+            if (kx + tw > M + CW) { kx = M; ky += 18; }
+            doc.roundedRect(kx, ky, tw, 16, 3).fillAndStroke("#FFF7ED", "#FDBA74");
+            doc.fillColor(C.orange).font("Helvetica").fontSize(8)
+                .text(kwStr, kx + 8, ky + 4, { width: tw - 16, lineBreak: false });
+            kx += tw + 5;
         });
 
-        doc.y = ky + chipH + 14;
-        doc.moveDown(0.6);
+        doc.y = ky + 20;
+        doc.moveDown(0.5);
     }
 
-    // ── Bullet sections ───────────────────────────────────────────────────────
-    drawBulletSection(doc, "Strengths", report.strengths, "#F0FDF4", "#86EFAC", COLORS.green);
-    drawBulletSection(doc, "Weaknesses", report.weaknesses, "#FEFCE8", "#FDE68A", COLORS.yellow);
-    drawBulletSection(doc, "Suggestions", report.suggestions, "#EFF6FF", "#BFDBFE", "#1D4ED8");
+    // ── Content sections ──────────────────────────────────────────────────────
+    itemSection(doc, "Strengths", report.strengths, "#F0FDF4", "#86EFAC", C.green);
+    itemSection(doc, "Weaknesses", report.weaknesses, "#FEFCE8", "#FDE68A", C.yellow);
+    itemSection(doc, "Suggestions", report.suggestions, "#EFF6FF", "#BFDBFE", "#1D4ED8");
 
-    // ── Stamp footer on every page ────────────────────────────────────────────
-    const range = doc.bufferedPageRange();
-    for (let i = 0; i < range.count; i++) {
-        doc.switchToPage(range.start + i);
-        const ph = doc.page.height, pw = doc.page.width;
-        doc.rect(0, ph - 36, pw, 36).fill("#F9FAFB");
-        doc.fillColor(COLORS.muted).fontSize(8).font("Helvetica")
-            .text("Generated by ResumeIQ · resumeiq.app", M, ph - 22, {
-                width: pw - M * 2, align: "center",
+    // ── Footer on page 1 (and any overflow pages) ─────────────────────────────
+    const { count, start } = doc.bufferedPageRange();
+    for (let i = 0; i < count; i++) {
+        doc.switchToPage(start + i);
+        doc.rect(0, FOOTER_Y, 595.28, 841.89 - FOOTER_Y).fill("#F9FAFB");
+        doc.fillColor(C.muted).fontSize(7).font("Helvetica")
+            .text("Generated by ResumeIQ · resumeiq.app", M, FOOTER_Y + 12, {
+                width: CW, align: "center",
             });
     }
 
@@ -127,54 +116,45 @@ export const generateReportPDF = (report, dest) => {
     doc.end();
 };
 
-// ── Score box helper ──────────────────────────────────────────────────────────
-function drawScoreBox(doc, x, y, w, label, score) {
-    const safeScore = typeof score === "number" ? score : 0;
-    doc.roundedRect(x, y, w, 72, 6).fillAndStroke(COLORS.sectionBg, COLORS.border);
-    doc.fillColor(COLORS.muted).fontSize(8).font("Helvetica-Bold")
-        .text(label, x + 12, y + 10, { width: w - 20 });
-    doc.fillColor(scoreColor(safeScore)).fontSize(36).font("Helvetica-Bold")
-        .text(String(safeScore), x + 12, y + 22, { width: 80 });
-    doc.fillColor(COLORS.muted).fontSize(10).font("Helvetica")
-        .text(`/ 100  —  ${scoreLabel(safeScore)}`, x + 65, y + 36);
+// ── Score box ─────────────────────────────────────────────────────────────────
+function scoreBox(doc, x, y, w, label, rawScore) {
+    const score = typeof rawScore === "number" ? rawScore : 0;
+    doc.roundedRect(x, y, w, 56, 5).fillAndStroke(C.bg, C.border);
+    doc.fillColor(C.muted).fontSize(7).font("Helvetica-Bold").text(label, x + 10, y + 8, { width: w - 20 });
+    doc.fillColor(scoreColor(score)).fontSize(30).font("Helvetica-Bold").text(String(score), x + 10, y + 18, { width: 60 });
+    doc.fillColor(C.muted).fontSize(9).font("Helvetica").text(`/ 100  —  ${scoreLabel(score)}`, x + 55, y + 28);
 }
 
-// ── Section rendering helper ──────────────────────────────────────────────────
-function drawBulletSection(doc, title, items, bgColor, borderColor, textColor) {
-    const validItems = Array.isArray(items)
-        ? items.filter(item => item && String(item).trim().length > 0)
-        : [];
-    if (validItems.length === 0) return;
+// ── Section title ─────────────────────────────────────────────────────────────
+function sectionTitle(doc, text, color) {
+    doc.fillColor(color).fontSize(12).font("Helvetica-Bold").text(text, M, doc.y, { width: CW });
+}
 
-    ensureSpace(doc, 60);
-    doc.fillColor(textColor).fontSize(13).font("Helvetica-Bold")
-        .text(title, M, doc.y, { width: CONTENT_W });
-    doc.moveDown(0.4);
+// ── Bullet section ────────────────────────────────────────────────────────────
+function itemSection(doc, title, items, bgColor, borderColor, textColor) {
+    const list = (Array.isArray(items) ? items : [])
+        .filter(it => it && String(it).trim())
+        .slice(0, MAX_ITEMS);
 
-    validItems.forEach((item, i) => {
-        const itemStr = String(item);
-        const textH = doc.heightOfString(itemStr, { width: CONTENT_W - 34 }) || 14;
-        const boxH = textH + 16;
+    if (list.length === 0) return;
 
-        ensureSpace(doc, boxH + 8);
+    sectionTitle(doc, title, textColor);
+    doc.moveDown(0.3);
+
+    list.forEach((item, i) => {
+        const txt = String(item);
+        const txtH = doc.fontSize(9).heightOfString(txt, { width: CW - 28 });
+        const bH = Math.max(txtH + 10, 22);
         const y = doc.y;
 
-        doc.roundedRect(M, y, CONTENT_W, boxH, 5).fillAndStroke(bgColor, borderColor);
-        doc.fillColor(textColor).fontSize(10).font("Helvetica-Bold")
-            .text("•", M + 12, y + 8, { lineBreak: false });
-        doc.fillColor(COLORS.dark).fontSize(10).font("Helvetica")
-            .text(itemStr, M + 26, y + 8, { width: CONTENT_W - 34, lineBreak: true });
+        doc.roundedRect(M, y, CW, bH, 4).fillAndStroke(bgColor, borderColor);
+        doc.fillColor(textColor).fontSize(9).font("Helvetica-Bold")
+            .text("•", M + 10, y + (bH - 9) / 2, { lineBreak: false });
+        doc.fillColor(C.dark).fontSize(9).font("Helvetica")
+            .text(txt, M + 22, y + (bH - txtH) / 2, { width: CW - 28, lineBreak: true });
 
-        doc.y = y + boxH + (i < validItems.length - 1 ? 4 : 0);
+        doc.y = y + bH + (i < list.length - 1 ? 3 : 0);
     });
 
-    doc.moveDown(0.8);
-}
-
-// ── Ensure minimum vertical space, add page if needed ─────────────────────────
-function ensureSpace(doc, needed) {
-    const available = doc.page.height - doc.page.margins.bottom - doc.y;
-    if (available < needed) {
-        doc.addPage();
-    }
+    doc.moveDown(0.5);
 }

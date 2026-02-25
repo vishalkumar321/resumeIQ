@@ -93,12 +93,12 @@ export const generateReport = asyncWrapper(async (req, res) => {
       analysis_type: mode,
       role: role ?? null,
       score: Math.round(Math.min(100, Math.max(0, score))),
-      strengths: strengths.slice(0, 10),
-      weaknesses: weaknesses.slice(0, 10),
-      suggestions: suggestions.slice(0, 10),
+      strengths: strengths.slice(0, 5),
+      weaknesses: weaknesses.slice(0, 5),
+      suggestions: suggestions.slice(0, 5),
       job_description: job_description ?? null,
       match_score: mode === "jd" ? Math.round(Math.min(100, Math.max(0, analysis.match_score))) : null,
-      missing_keywords: mode === "jd" ? analysis.missing_keywords.slice(0, 30) : null,
+      missing_keywords: mode === "jd" ? analysis.missing_keywords.slice(0, 10) : null,
     })
     .select()
     .single();
