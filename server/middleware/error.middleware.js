@@ -9,26 +9,32 @@ import { ZodError } from "zod";
 export const globalErrorHandler = (err, req, res, next) => {
     if (res.headersSent) return;
 
-    let { statusCode, message } = err;
+    // ApiError = intentional error thrown by our code — preserve the message
+    // All other errors = unexpected crash — use generic message
+    const isApiError = err instanceof ApiError;
 
-    // Default to 500 if status code is not defined or is a true internal error
-    if (!statusCode || statusCode >= 500) {
+    let statusCode = err.statusCode || 500;
+    let message = err.message || "An unexpected error occurred. Please try again.";
+
+    // For truly unexpected errors (not our ApiError), use a generic message
+    if (!isApiError && (!statusCode || statusCode >= 500)) {
         statusCode = 500;
         message = "An unexpected error occurred. Please try again.";
     }
 
-    // Specialized handling for Zod validation errors
+    // Zod validation errors
     if (err instanceof ZodError) {
         statusCode = 422;
         message = err.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
     }
 
-    // Log the error (can be extended to use a real logger like Winston/Pino)
-    if (process.env.NODE_ENV !== 'production' || statusCode === 500) {
+    // Always log 5xx errors with full detail
+    if (statusCode >= 500) {
         console.error(`[ERROR] ${req.method} ${req.path}`, {
             statusCode,
             message: err.message,
-            stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined
+            cause: err.cause,
+            stack: err.stack,
         });
     }
 
