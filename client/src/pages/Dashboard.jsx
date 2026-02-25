@@ -91,6 +91,16 @@ export default function Dashboard() {
     setStep("configure");
   };
 
+  // Keep the same resume, just go back to pick a new role / JD
+  const handleAnalyzeAgain = () => {
+    setStep("configure");
+    setReport(null);
+    setError("");
+    setMode("role");
+    setRole("");
+    setJobDesc("");
+  };
+
   const handleDownloadPDF = async () => {
     if (!report?.id || pdfLoading) return;
     setPdfLoading(true);
@@ -145,6 +155,7 @@ export default function Dashboard() {
     navigate("/login");
   };
 
+  // Full reset — clears resume, goes back to upload
   const handleReset = () => {
     setStep("upload");
     setResume(null);
@@ -175,12 +186,12 @@ export default function Dashboard() {
           >
             Settings
           </button>
-          {step === "result" && (
+          {step !== "upload" && step !== "loading" && (
             <button
-              onClick={handleReset}
+              onClick={handleAnalyzeAgain}
               className="text-sm text-gray-500 hover:text-gray-800 transition"
             >
-              ← New Analysis
+              🔄 Analyze Again
             </button>
           )}
           <button
@@ -208,15 +219,22 @@ export default function Dashboard() {
         {/* STEP 2: Configure */}
         {step === "configure" && (
           <section className="bg-white border rounded-xl p-6 shadow-sm space-y-5">
-            {/* Upload success */}
+            {/* Resume pill — shows on configure so user always knows which resume is loaded */}
             <div className="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-              <span className="text-green-600 text-lg">✔</span>
-              <div>
-                <p className="text-sm font-medium text-green-800">Resume uploaded</p>
-                <p className="text-xs text-green-600 truncate max-w-xs">
+              <span className="text-green-600 text-xl">✔</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-green-800">Resume ready</p>
+                <p className="text-xs text-green-600 truncate">
                   {resume?.file_path?.split("/").pop()}
                 </p>
               </div>
+              <button
+                onClick={handleReset}
+                title="Upload a different resume"
+                className="shrink-0 text-xs text-gray-400 hover:text-red-500 border border-gray-200 hover:border-red-300 px-2.5 py-1 rounded-lg transition"
+              >
+                Change
+              </button>
             </div>
 
             {/* Mode toggle */}
@@ -377,12 +395,14 @@ export default function Dashboard() {
               {pdfError && (
                 <p className="text-xs text-red-600 text-center">{pdfError}</p>
               )}
+
+              {/* Primary action row */}
               <div className="flex gap-3">
                 <button
-                  onClick={handleReset}
-                  className="flex-1 border border-gray-300 text-gray-700 py-2.5 rounded-lg text-sm hover:bg-gray-50 transition"
+                  onClick={handleAnalyzeAgain}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-lg text-sm font-medium transition"
                 >
-                  Analyze Another Resume
+                  🔄 Analyze Again
                 </button>
                 <button
                   onClick={() => navigate("/history")}
@@ -391,6 +411,8 @@ export default function Dashboard() {
                   View History
                 </button>
               </div>
+
+              {/* PDF download */}
               <button
                 onClick={handleDownloadPDF}
                 disabled={pdfLoading}
@@ -402,6 +424,17 @@ export default function Dashboard() {
                   <>⬇ Download PDF Report</>
                 )}
               </button>
+
+              {/* Secondary: start fresh with a new resume */}
+              <p className="text-center text-xs text-gray-400">
+                Want to test a different resume?{" "}
+                <button
+                  onClick={handleReset}
+                  className="text-indigo-500 hover:underline"
+                >
+                  Upload new resume →
+                </button>
+              </p>
             </div>
           </section>
         )}
