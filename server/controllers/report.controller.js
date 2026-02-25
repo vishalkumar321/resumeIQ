@@ -11,6 +11,7 @@ export const generateReport = asyncWrapper(async (req, res) => {
   const supabase = req.supabase;
 
   // ── Step 0: Daily Limit Check ────────────────────────────────────────
+  console.log("[report] step0: checking daily limit for user", user.id);
   const startOfToday = new Date();
   startOfToday.setUTCHours(0, 0, 0, 0);
 
@@ -20,6 +21,7 @@ export const generateReport = asyncWrapper(async (req, res) => {
     .gte("created_at", startOfToday.toISOString());
 
   if (countError) {
+    console.error("[report] step0 FAILED:", countError);
     throw new ApiError(500, "Failed to verify daily report limit.");
   }
 
@@ -28,6 +30,7 @@ export const generateReport = asyncWrapper(async (req, res) => {
   }
 
   // ── Step 1: Fetch resume (RLS-enforced) ───────────────────────────────
+  console.log("[report] step1: fetching resume", resume_id);
   const { data: resume, error: resumeError } = await supabase
     .from("resumes")
     .select("id, file_path, user_id")
@@ -35,24 +38,30 @@ export const generateReport = asyncWrapper(async (req, res) => {
     .single();
 
   if (resumeError || !resume) {
+    console.error("[report] step1 FAILED:", resumeError);
     return fail(res, "Resume not found or access denied.", 404);
   }
 
   // ── Step 2: Download PDF from Storage ────────────────────────────────
+  console.log("[report] step2: downloading", resume.file_path);
   const { data: fileBlob, error: downloadError } = await supabase.storage
     .from("resumes")
     .download(resume.file_path);
 
   if (downloadError || !fileBlob) {
+    console.error("[report] step2 FAILED:", downloadError);
     throw new ApiError(500, "Failed to retrieve resume file from storage.");
   }
 
   const buffer = Buffer.from(await fileBlob.arrayBuffer());
 
   // ── Step 3: Extract text ──────────────────────────────────────────────
+  console.log("[report] step3: extracting PDF text");
   const resumeText = await extractTextFromPDF(buffer);
+  console.log("[report] step3: extracted", resumeText.length, "chars");
 
   // ── Step 4: AI analysis ───────────────────────────────────────────────
+  console.log("[report] step4: calling AI, mode=", mode);
   let analysis;
   try {
     analysis =
