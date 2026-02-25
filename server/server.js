@@ -26,8 +26,12 @@ const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps or curl) and whitelisted origins
-      if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+      // Allow requests with no origin (curl, mobile apps, Render health checks)
+      if (!origin) return callback(null, true);
+      // If wildcard is set, allow everything
+      if (ALLOWED_ORIGINS.includes("*")) return callback(null, true);
+      // Otherwise check the whitelist
+      if (ALLOWED_ORIGINS.includes(origin)) {
         callback(null, true);
       } else {
         console.warn(`[SECURITY] CORS blocked request from unauthorized origin: ${origin}`);
@@ -36,7 +40,7 @@ app.use(
     },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: false, // We use JWT in 'Authorization' header, not cookies
+    credentials: false,
     optionsSuccessStatus: 200,
   })
 );
