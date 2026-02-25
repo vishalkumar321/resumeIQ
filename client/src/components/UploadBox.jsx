@@ -43,9 +43,10 @@ export default function UploadBox({ onUploaded }) {
 
       onUploaded(res.data.data.resume);
     } catch (err) {
+      const rawError = err.response?.data?.error;
       setError(
-        err.response?.data?.error?.message ||
-        "Upload failed. Please check your file and try again."
+        typeof rawError === "object" ? rawError?.message : rawError ||
+          "Upload failed. Please check your file and try again."
       );
     } finally {
       setLoading(false);

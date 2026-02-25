@@ -95,9 +95,9 @@ export default function ReportDetail() {
             await api.delete(`/report/${report.id}`);
             navigate("/history");
         } catch (err) {
+            const rawError = err.response?.data?.error;
             setDeleteError(
-                err.response?.data?.error?.message ||
-                "Failed to delete report. Please try again."
+                typeof rawError === "object" ? rawError?.message : rawError || "Failed to delete report. Please try again."
             );
             setConfirmDelete(false);
         } finally {

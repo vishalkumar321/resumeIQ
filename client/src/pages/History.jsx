@@ -65,7 +65,8 @@ export default function History() {
                 setReports(res.data.data.reports);
             } catch (err) {
                 if (err.response?.status !== 401) {
-                    setError(err.response?.data?.error?.message || "Failed to load report history.");
+                    const rawError = err.response?.data?.error;
+                    setError(typeof rawError === "object" ? rawError?.message : rawError || "Failed to load report history.");
                 }
             } finally {
                 setLoading(false);
@@ -88,8 +89,9 @@ export default function History() {
             setReports((prev) => prev.filter((r) => r.id !== id));
             setConfirmId(null);
         } catch (err) {
+            const rawError = err.response?.data?.error;
             setDeleteError(
-                err.response?.data?.error?.message || "Delete failed. Please try again."
+                typeof rawError === "object" ? rawError?.message : rawError || "Delete failed. Please try again."
             );
             setConfirmId(null);
         } finally {

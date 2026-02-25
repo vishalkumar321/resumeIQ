@@ -131,10 +131,10 @@ export default function Dashboard() {
       setReport(res.data.data.report);
       setStep("result");
     } catch (err) {
-      const msg =
-        err.response?.data?.error?.message ||
-        err.response?.data?.message ||
-        "Report generation failed. Please try again.";
+      const rawError = err.response?.data?.error;
+      const msg = typeof rawError === "object"
+        ? rawError?.message
+        : rawError || "Report generation failed. Please try again.";
       setError(msg);
       setStep("configure");
     }
