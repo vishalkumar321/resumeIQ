@@ -3,10 +3,8 @@ import rateLimit from "express-rate-limit";
 const json429 = (_req, res) =>
     res.status(429).json({
         success: false,
-        error: {
-            code: "RATE_LIMIT_EXCEEDED",
-            message: "Too many requests. Please slow down and try again later.",
-        },
+        data: null,
+        error: "Too many requests. Please slow down and try again later.",
     });
 
 /**
