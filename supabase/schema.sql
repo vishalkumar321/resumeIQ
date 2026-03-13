@@ -58,6 +58,11 @@ CREATE TABLE public.reports (
     suggestions      TEXT[]      NOT NULL DEFAULT '{}',
     missing_keywords TEXT[],                            -- filled when analysis_type = 'jd'
     job_description  TEXT,                              -- filled when analysis_type = 'jd'
+    optimized_resume JSONB,                             -- structured AI-generated resume
+    optimized_score  INTEGER,                           -- ATS score of rewritten resume
+    resume_text      TEXT,                              -- raw text extracted from PDF
+    report_name      TEXT,                              -- human-readable name (target role or filename)
+    rewrite_created_at TIMESTAMPTZ DEFAULT NOW(),       -- when the rewrite was generated
     created_at       TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 

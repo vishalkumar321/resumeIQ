@@ -13,6 +13,8 @@
   "type": "module",
   "dependencies": {
     "@supabase/supabase-js": "^2.97.0",
+    "axios": "^1.13.6",
+    "cheerio": "^1.2.0",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
@@ -23,6 +25,7 @@
     "multer": "^2.0.2",
     "pdf-parse": "^1.1.1",
     "pdfkit": "^0.17.2",
+    "puppeteer": "^24.39.0",
     "undici": "^7.22.0",
     "zod": "^4.3.6"
   },

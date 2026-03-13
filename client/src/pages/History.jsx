@@ -1,225 +1,408 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect, useMemo } from "react";
+import { useNavigate, Link } from "react-router-dom";
 import api from "../services/api";
-import { downloadPDF } from "../services/pdf";
+import Navbar from "../components/Navbar";
+import ScoreBadge from "../components/ScoreBadge";
+import Skeleton from "../components/Skeleton";
+import ConfirmModal from "../components/ConfirmModal";
+import { useToast } from "../components/Toast";
 
-function ScoreBadge({ score }) {
-    const color =
-        score >= 75 ? "bg-green-100 text-green-700 border-green-200"
-            : score >= 50 ? "bg-yellow-100 text-yellow-700 border-yellow-200"
-                : "bg-red-100 text-red-700 border-red-200";
-    const label = score >= 75 ? "Strong" : score >= 50 ? "Moderate" : "Weak";
-    return (
-        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${color}`}>
-            {score} — {label}
-        </span>
-    );
-}
+// ── Shared Components ──────────────────────────────────────────────────────
 
-function TypeBadge({ type }) {
-    return type === "jd" ? (
-        <span className="text-xs font-semibold px-2.5 py-1 rounded-full border bg-indigo-50 border-indigo-200 text-indigo-700">
-            JD Match
-        </span>
-    ) : (
-        <span className="text-xs font-semibold px-2.5 py-1 rounded-full border bg-gray-100 border-gray-200 text-gray-600">
-            Role Analysis
-        </span>
-    );
-}
-
-function formatDate(iso) {
-    return new Date(iso).toLocaleDateString("en-IN", {
-        day: "numeric", month: "short", year: "numeric",
-    });
-}
-
-/** Inline toast-style error that auto-dismisses or can be closed manually */
-function InlineError({ message, onClose }) {
-    if (!message) return null;
-    return (
-        <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-            <span className="shrink-0 mt-0.5">⚠️</span>
-            <span className="flex-1">{message}</span>
-            {onClose && (
-                <button onClick={onClose} className="shrink-0 text-red-400 hover:text-red-600 font-bold leading-none">×</button>
-            )}
-        </div>
-    );
-}
+// ── Main Page ──────────────────────────────────────────────────────────────
 
 export default function History() {
     const navigate = useNavigate();
     const [reports, setReports] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
-    const [deletingId, setDeletingId] = useState(null);
-    const [confirmId, setConfirmId] = useState(null);
-    const [deleteError, setDeleteError] = useState("");
-    const [pdfError, setPdfError] = useState("");
+    const { showToast } = useToast();
+
+
+    // UI States
+    const [searchTerm, setSearchTerm] = useState("");
+    const [filter, setFilter] = useState("All"); // All, Analyzed Only, Optimized, Downloaded
+    const [sort, setSort] = useState("Newest First");
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 6;
+
+    // Interaction States
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [reportToDelete, setReportToDelete] = useState(null);
+    const [toast, setToast] = useState("");
+    const [downloadingId, setDownloadingId] = useState(null);
 
     useEffect(() => {
+
         const fetchHistory = async () => {
             try {
                 const res = await api.get("/report/history");
-                setReports(res.data.data.reports);
+                setReports(res.data.data.reports || []);
             } catch (err) {
-                if (err.response?.status !== 401) {
-                    const rawError = err.response?.data?.error;
-                    setError(typeof rawError === "object" ? rawError?.message : rawError || "Failed to load report history.");
-                }
+                setError("Could not load your reports. Please try again.");
             } finally {
                 setLoading(false);
             }
         };
+
         fetchHistory();
     }, []);
 
-    const handleLogout = () => {
-        localStorage.removeItem("token");
-        navigate("/login");
-    };
 
-    const handleDelete = async (id) => {
-        if (deletingId) return;
-        setDeleteError("");
-        setDeletingId(id);
+    // ── Logic ────────────────────────────────────────────────────────────────
+
+    const stats = useMemo(() => {
+        const total = reports.length;
+        const best = total > 0 ? Math.max(...reports.map(r => r.score || 0)) : 0;
+        const optimized = reports.filter(r => r.optimized_resume != null).length;
+        const downloadedIds = JSON.parse(localStorage.getItem("resumeiq_downloads") || "[]");
+        const downloaded = reports.filter(r => downloadedIds.includes(r.id)).length;
+        return { total, best, optimized, downloaded };
+    }, [reports]);
+
+    const filteredAndSortedReports = useMemo(() => {
+        let result = [...reports];
+
+        // 1. Filter
+        if (filter === "Analyzed Only") {
+            result = result.filter(r => r.optimized_resume === null);
+        } else if (filter === "Optimized") {
+            result = result.filter(r => r.optimized_resume !== null);
+        } else if (filter === "Downloaded") {
+            const downloadedIds = JSON.parse(localStorage.getItem("resumeiq_downloads") || "[]");
+            result = result.filter(r => downloadedIds.includes(r.id));
+        }
+
+        // 2. Search
+        if (searchTerm) {
+            const term = searchTerm.toLowerCase();
+            result = result.filter(r => {
+                const name = (r.report_name || r.role || "Resume Analysis").toLowerCase();
+                const role = (r.role || "").toLowerCase();
+                const date = new Date(r.created_at).toLocaleDateString("en-US", { month: 'short', day: 'numeric', year: 'numeric' }).toLowerCase();
+                return name.includes(term) || role.includes(term) || date.includes(term);
+            });
+        }
+
+        // 3. Sort
+        result.sort((a, b) => {
+            if (sort === "Newest First") return new Date(b.created_at) - new Date(a.created_at);
+            if (sort === "Oldest First") return new Date(a.created_at) - new Date(b.created_at);
+            if (sort === "Highest ATS Score") return (b.score || 0) - (a.score || 0);
+            if (sort === "Lowest ATS Score") return (a.score || 0) - (b.score || 0);
+            return 0;
+        });
+
+        return result;
+    }, [reports, filter, sort, searchTerm]);
+
+    const paginatedReports = useMemo(() => {
+        const start = (currentPage - 1) * itemsPerPage;
+        return filteredAndSortedReports.slice(start, start + itemsPerPage);
+    }, [filteredAndSortedReports, currentPage]);
+
+    const totalPages = Math.ceil(filteredAndSortedReports.length / itemsPerPage);
+
+    // ── Handlers ─────────────────────────────────────────────────────────────
+
+    const handleDownload = async (id, role) => {
+        setDownloadingId(id);
         try {
-            await api.delete(`/report/${id}`);
-            setReports((prev) => prev.filter((r) => r.id !== id));
-            setConfirmId(null);
+            const res = await api.get(`/report/download/${id}`, { responseType: 'blob' });
+            const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+            const link = document.createElement('a');
+            link.href = url;
+            const slug = (role || "optimized").toLowerCase().replace(/\s+/g, "-");
+            link.setAttribute('download', `resumeiq-${slug}-optimized.pdf`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+
+            // Track download
+            const downloadedIds = JSON.parse(localStorage.getItem("resumeiq_downloads") || "[]");
+            if (!downloadedIds.includes(id)) {
+                downloadedIds.push(id);
+                localStorage.setItem("resumeiq_downloads", JSON.stringify(downloadedIds));
+
+                // Track global count for dashboard (backward compat)
+                const count = parseInt(localStorage.getItem("resumeiq_downloads_count") || "0");
+                localStorage.setItem("resumeiq_downloads_count", (count + 1).toString());
+            }
         } catch (err) {
-            const rawError = err.response?.data?.error;
-            setDeleteError(
-                typeof rawError === "object" ? rawError?.message : rawError || "Delete failed. Please try again."
-            );
-            setConfirmId(null);
+            console.error("Download failed:", err);
         } finally {
-            setDeletingId(null);
+            setDownloadingId(null);
         }
     };
 
-    const handlePDFDownload = async (report) => {
-        setPdfError("");
+    const confirmDelete = (report) => {
+        setReportToDelete(report);
+        setShowDeleteModal(true);
+    };
+
+    const handleDelete = async () => {
+        if (!reportToDelete) return;
         try {
-            const slug = (report.role ?? "jd-match").toLowerCase().replace(/\s+/g, "-");
-            await downloadPDF(report.id, `resumeiq-${slug}-report.pdf`);
-        } catch {
-            setPdfError("PDF download failed. Please try again.");
+            await api.delete(`/report/${reportToDelete.id}`);
+            setReports(prev => prev.filter(r => r.id !== reportToDelete.id));
+
+            // Cleanup storage
+            const downloadedIds = JSON.parse(localStorage.getItem("resumeiq_downloads") || "[]");
+            localStorage.setItem("resumeiq_downloads", JSON.stringify(downloadedIds.filter(id => id !== reportToDelete.id)));
+
+            showToast("Report deleted", "success");
+        } catch (err) {
+            showToast("Delete failed", "error");
+            console.error("Delete failed:", err);
+        } finally {
+            setShowDeleteModal(false);
+            setReportToDelete(null);
         }
     };
+
+    // ── Render ───────────────────────────────────────────────────────────────
 
     return (
-        <div className="min-h-screen bg-gray-50">
-            {/* Navbar */}
-            <nav className="bg-white border-b px-6 py-4 flex items-center justify-between shadow-sm">
-                <button onClick={() => navigate("/")} className="text-xl font-bold tracking-tight text-gray-900 hover:opacity-80 transition">
-                    Resume<span className="text-indigo-600">IQ</span>
-                </button>
-                <div className="flex items-center gap-4">
-                    <button onClick={() => navigate("/")} className="text-sm text-gray-500 hover:text-gray-800 transition">← Dashboard</button>
-                    <button onClick={handleLogout} className="text-sm bg-red-50 text-red-600 border border-red-200 px-4 py-1.5 rounded-lg hover:bg-red-100 transition">Logout</button>
-                </div>
-            </nav>
+        <div className="min-h-screen bg-gray-50 font-sans text-gray-900 pb-20 overflow-x-hidden">
+            <Navbar />
 
-            <main className="max-w-3xl mx-auto px-4 py-10 space-y-6">
-                <div>
-                    <h2 className="text-2xl font-bold text-gray-800">Report History</h2>
-                    <p className="text-sm text-gray-400 mt-1">All past analyses, newest first.</p>
-                </div>
+            <main className="max-w-4xl mx-auto px-6 py-10 space-y-8 animate-in fade-in duration-500">
 
-                {/* Global inline errors */}
-                <InlineError message={deleteError} onClose={() => setDeleteError("")} />
-                <InlineError message={pdfError} onClose={() => setPdfError("")} />
-
-                {loading && (
-                    <div className="flex justify-center py-20">
-                        <div className="w-10 h-10 rounded-full border-4 border-indigo-200 border-t-indigo-600 animate-spin" />
+                {/* ── SECTION 2: PAGE HEADER ────────────────────────────────────────── */}
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h1 className="text-3xl font-black tracking-tight text-gray-900">My Resume History</h1>
+                        <p className="text-sm font-bold text-gray-400 mt-1">
+                            {reports.length === 0 ? "No resumes analyzed yet" :
+                                reports.length === 1 ? "1 resume analyzed" :
+                                    `${reports.length} resumes analyzed`}
+                        </p>
                     </div>
-                )}
+                    <button
+                        onClick={() => navigate("/dashboard")}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase tracking-widest px-6 py-3 rounded-xl shadow-lg shadow-indigo-100 transition text-xs"
+                    >
+                        + Analyze New Resume
+                    </button>
+                </div>
 
-                {!loading && error && (
-                    <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">{error}</div>
-                )}
+                {/* ── SECTION 8: STATS SUMMARY BAR ──────────────────────────────────── */}
+                <div className="bg-white border border-gray-100 rounded-xl px-6 py-3 flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-gray-400 shadow-sm overflow-x-auto no-scrollbar gap-8">
+                    <div className="flex items-center gap-2 whitespace-nowrap">
+                        <span className="text-lg">📄</span>
+                        <span>{stats.total} Total</span>
+                    </div>
+                    <div className="w-px h-4 bg-gray-100" />
+                    <div className="flex items-center gap-2 whitespace-nowrap">
+                        <span className="text-lg text-amber-500">⚡</span>
+                        <span>Best Score: <span className="text-gray-900">{stats.best}</span></span>
+                    </div>
+                    <div className="w-px h-4 bg-gray-100" />
+                    <div className="flex items-center gap-2 whitespace-nowrap">
+                        <span className="text-lg text-purple-500">🔁</span>
+                        <span>{stats.optimized} Optimized</span>
+                    </div>
+                    <div className="w-px h-4 bg-gray-100" />
+                    <div className="flex items-center gap-2 whitespace-nowrap">
+                        <span className="text-lg text-blue-500">📥</span>
+                        <span>{stats.downloaded} Downloaded</span>
+                    </div>
+                </div>
 
-                {!loading && !error && reports.length === 0 && (
-                    <div className="flex flex-col items-center justify-center py-24 space-y-4 text-center">
-                        <span className="text-5xl">📄</span>
-                        <p className="text-gray-500 font-medium">No reports yet.</p>
-                        <p className="text-gray-400 text-sm">Upload a resume and generate your first report.</p>
-                        <button onClick={() => navigate("/")} className="mt-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm px-5 py-2 rounded-lg transition">
-                            Go to Dashboard
+                {/* ── SECTION 3: FILTER & SORT ROW ──────────────────────────────────── */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                    <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 md:pb-0">
+                        {["All", "Analyzed Only", "Optimized", "Downloaded"].map(p => (
+                            <button
+                                key={p}
+                                onClick={() => { setFilter(p); setCurrentPage(1); }}
+                                className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition whitespace-nowrap ${filter === p ? "bg-indigo-600 text-white shadow-md shadow-indigo-100" : "bg-gray-100 text-gray-400 hover:bg-gray-200"}`}
+                            >
+                                {p}
+                            </button>
+                        ))}
+                    </div>
+
+                    <div className="relative min-w-[180px]">
+                        <select
+                            value={sort}
+                            onChange={(e) => { setSort(e.target.value); setCurrentPage(1); }}
+                            className="w-full bg-white border border-gray-100 rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-indigo-100 cursor-pointer appearance-none"
+                        >
+                            {["Newest First", "Oldest First", "Highest ATS Score", "Lowest ATS Score"].map(s => (
+                                <option key={s} value={s}>{s}</option>
+                            ))}
+                        </select>
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400 text-[10px]">▼</div>
+                    </div>
+                </div>
+
+                {/* ── SECTION 4: SEARCH BAR ─────────────────────────────────────────── */}
+                <div className="relative group">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg group-focus-within:text-indigo-600 transition tracking-tighter">🔍</span>
+                    <input
+                        type="text"
+                        value={searchTerm}
+                        onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+                        placeholder="Search by filename or target role..."
+                        className="w-full bg-white border border-gray-100 rounded-2xl px-12 py-4 text-sm font-bold focus:ring-4 focus:ring-indigo-50 focus:border-indigo-300 transition shadow-sm outline-none"
+                    />
+                    {searchTerm && (
+                        <button
+                            onClick={() => setSearchTerm("")}
+                            className="absolute right-4 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-xl text-gray-400"
+                        >
+                            ×
+                        </button>
+                    )}
+                </div>
+
+                {/* ── SECTION 5: REPORT CARDS LIST ───────────────────────────────────── */}
+                <div className="space-y-4">
+                    {loading ? (
+                        [1, 2, 3].map(n => (
+                            <div key={n} className="bg-white border border-gray-100 rounded-2xl p-6 flex gap-6">
+                                <Skeleton.Block className="w-14 h-14 rounded-2xl shrink-0" />
+                                <div className="flex-1 space-y-3">
+                                    <Skeleton.Block className="h-5 w-1/2" />
+                                    <Skeleton.Block className="h-3 w-1/3" />
+                                    <div className="flex gap-4">
+                                        <Skeleton.Block className="h-4 w-16" />
+                                        <Skeleton.Block className="h-4 w-16" />
+                                    </div>
+                                </div>
+                            </div>
+                        ))
+                    ) : error ? (
+                        <div className="bg-red-50 border border-red-100 p-8 rounded-[2rem] text-center space-y-4">
+                            <p className="text-red-600 font-bold">{error}</p>
+                            <button
+                                onClick={() => window.location.reload()}
+                                className="bg-red-600 text-white font-black uppercase tracking-widest px-6 py-2 rounded-xl text-[10px]"
+                            >
+                                Retry
+                            </button>
+                        </div>
+                    ) : filteredAndSortedReports.length === 0 ? (
+                        <div className="bg-white border-2 border-dashed border-gray-100 rounded-[3rem] py-24 flex flex-col items-center justify-center text-center space-y-6">
+                            <span className="text-7xl">{reports.length === 0 ? "📄" : "🔍"}</span>
+                            <div>
+                                <h3 className="text-xl font-black text-gray-900">
+                                    {reports.length === 0 ? "No resumes yet" : "No results found"}
+                                </h3>
+                                <p className="text-sm font-bold text-gray-400 mt-1">
+                                    {reports.length === 0 ? "Upload your first resume to start tracking your ATS scores" : "Try a different filter or search term"}
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    if (reports.length === 0) navigate("/dashboard");
+                                    else { setFilter("All"); setSearchTerm(""); }
+                                }}
+                                className="bg-indigo-600 text-white font-black uppercase tracking-widest px-8 py-3 rounded-2xl shadow-lg shadow-indigo-100 text-xs"
+                            >
+                                {reports.length === 0 ? "Analyze My Resume →" : "Clear Filters"}
+                            </button>
+                        </div>
+                    ) : (
+                        paginatedReports.map(report => (
+                            <div key={report.id} className="bg-white border border-gray-100 rounded-2xl p-5 md:p-6 flex flex-col md:flex-row gap-6 hover:shadow-md transition group shadow-sm border-l-4 border-l-transparent hover:border-l-indigo-600">
+                                <div className="flex items-start gap-6 flex-1 min-w-0">
+                                    <div className="w-14 h-14 bg-gray-50 rounded-2xl flex items-center justify-center text-3xl shrink-0 group-hover:scale-110 transition">
+                                        📄
+                                    </div>
+                                    <div className="flex-1 min-w-0 space-y-2">
+                                        <div className="flex flex-wrap items-center gap-3">
+                                            <h4 className="text-lg font-black text-gray-900 truncate">
+                                                {report.report_name || report.role || "Resume Analysis"}
+                                            </h4>
+                                            {report.optimized_resume ? (
+                                                <span className="px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-widest bg-green-50 text-green-600 border border-green-100">Optimized ✅</span>
+                                            ) : (
+                                                <span className="px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-widest bg-gray-50 text-gray-400 border border-gray-100">Not Optimized</span>
+                                            )}
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-y-1 text-[10px] font-bold text-gray-400">
+                                            <p>Uploaded: <span className="text-gray-600">{new Date(report.created_at).toLocaleDateString("en-IN", { day: 'numeric', month: 'short', year: 'numeric' })}</span></p>
+                                            <p>Target Role: <span className="text-gray-600 truncate inline-block align-bottom max-w-[120px]">{report.role || "—"}</span></p>
+                                            <div className="flex items-center gap-2">
+                                                <span>ATS Score:</span>
+                                                <ScoreBadge score={report.score} />
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <span>Optimized Score:</span>
+                                                <ScoreBadge score={report.optimized_resume?.ats_score_after} />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex md:flex-col gap-3 shrink-0">
+                                    <button
+                                        onClick={() => navigate(`/report/${report.id}`)}
+                                        className="flex-1 md:flex-none bg-indigo-50 text-indigo-600 text-[10px] font-black uppercase tracking-widest px-5 py-3 rounded-2xl hover:bg-indigo-600 hover:text-white transition whitespace-nowrap"
+                                    >
+                                        View Report →
+                                    </button>
+                                    {report.optimized_resume && (
+                                        <button
+                                            onClick={() => handleDownload(report.id, report.role)}
+                                            disabled={downloadingId === report.id}
+                                            className="flex-1 md:flex-none border border-gray-100 text-gray-600 text-[10px] font-black uppercase tracking-widest px-5 py-3 rounded-2xl hover:bg-gray-50 transition whitespace-nowrap disabled:opacity-50"
+                                        >
+                                            {downloadingId === report.id ? "Downloading..." : "⬇ Download PDF"}
+                                        </button>
+                                    )}
+                                    <button
+                                        onClick={() => confirmDelete(report)}
+                                        className="w-12 h-12 md:w-full md:h-auto border border-red-50 text-red-400 hover:bg-red-50 hover:text-red-600 p-3 rounded-2xl transition flex items-center justify-center text-xs"
+                                    >
+                                        🗑
+                                    </button>
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
+
+                {/* ── SECTION 9: PAGINATION ─────────────────────────────────────────── */}
+                {totalPages > 1 && (
+                    <div className="flex items-center justify-center gap-6 pt-10 border-t border-gray-100">
+                        <button
+                            disabled={currentPage === 1}
+                            onClick={() => setCurrentPage(p => p - 1)}
+                            className="bg-white border border-gray-100 text-[10px] font-black uppercase tracking-widest px-6 py-3 rounded-2xl shadow-sm hover:shadow-md transition disabled:opacity-30 active:scale-95"
+                        >
+                            ← Previous
+                        </button>
+                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                            Page <span className="text-indigo-600">{currentPage}</span> of {totalPages}
+                        </span>
+                        <button
+                            disabled={currentPage === totalPages}
+                            onClick={() => setCurrentPage(p => p + 1)}
+                            className="bg-white border border-gray-100 text-[10px] font-black uppercase tracking-widest px-6 py-3 rounded-2xl shadow-sm hover:shadow-md transition disabled:opacity-30 active:scale-95"
+                        >
+                            Next →
                         </button>
                     </div>
                 )}
-
-                {!loading && !error && reports.length > 0 && (
-                    <ul className="space-y-3">
-                        {reports.map((report) => (
-                            <li key={report.id} className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-                                {/* Card row — clickable area */}
-                                <button
-                                    onClick={() => navigate(`/report/${report.id}`)}
-                                    className="w-full text-left px-5 py-4 hover:bg-gray-50 transition-colors group"
-                                >
-                                    <div className="flex items-center justify-between gap-4">
-                                        <div className="space-y-1 min-w-0">
-                                            <p className="font-semibold text-gray-800 truncate group-hover:text-indigo-600 transition-colors">
-                                                {report.analysis_type === "jd" ? "JD Match Analysis" : report.role}
-                                            </p>
-                                            <p className="text-xs text-gray-400">{formatDate(report.created_at)}</p>
-                                        </div>
-                                        <div className="flex items-center gap-2 shrink-0">
-                                            <TypeBadge type={report.analysis_type} />
-                                            <ScoreBadge score={report.score} />
-                                            <span className="text-gray-300 group-hover:text-indigo-400 transition-colors text-lg">→</span>
-                                        </div>
-                                    </div>
-                                    {report.analysis_type === "jd" && report.match_score != null && (
-                                        <p className="mt-1.5 text-xs text-gray-400">
-                                            JD Match: <span className={`font-medium ${report.match_score >= 75 ? "text-green-600" : report.match_score >= 50 ? "text-yellow-500" : "text-red-500"}`}>{report.match_score}</span>
-                                        </p>
-                                    )}
-                                </button>
-
-                                {/* Actions row */}
-                                <div className="border-t border-gray-100 px-5 py-2.5 flex items-center justify-between gap-3">
-                                    {confirmId === report.id ? (
-                                        <div className="flex items-center gap-3 flex-1">
-                                            <span className="text-xs text-red-600 font-medium flex-1">Delete permanently?</span>
-                                            <button
-                                                onClick={() => setConfirmId(null)}
-                                                className="text-xs text-gray-500 hover:text-gray-700 border border-gray-200 px-3 py-1 rounded-lg transition"
-                                            >Cancel</button>
-                                            <button
-                                                onClick={() => handleDelete(report.id)}
-                                                disabled={deletingId === report.id}
-                                                className="text-xs bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white px-3 py-1 rounded-lg transition"
-                                            >
-                                                {deletingId === report.id ? "Deleting…" : "Yes, Delete"}
-                                            </button>
-                                        </div>
-                                    ) : (
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); setConfirmId(report.id); }}
-                                            className="text-xs text-gray-400 hover:text-red-500 transition"
-                                        >
-                                            🗑 Delete
-                                        </button>
-                                    )}
-
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); handlePDFDownload(report); }}
-                                        className="text-xs text-gray-400 hover:text-gray-700 transition ml-auto"
-                                    >
-                                        ⬇ PDF
-                                    </button>
-                                </div>
-                            </li>
-                        ))}
-                    </ul>
-                )}
             </main>
+
+            {/* ── SECTION 6: DELETE CONFIRMATION MODAL ────────────────────────────── */}
+            <ConfirmModal
+                isOpen={showDeleteModal}
+                onClose={() => setShowDeleteModal(false)}
+                onConfirm={handleDelete}
+                title="Delete this report?"
+                message={`This will permanently delete the analysis for "${reportToDelete?.role || "this role"}". This cannot be undone.`}
+                confirmText="Delete Report"
+            />
+
+            {/* Background decoration */}
+            <div className="fixed top-0 left-0 -z-10 w-[50vw] h-[50vh] bg-indigo-50/50 rounded-full blur-3xl opacity-30 -translate-x-1/2 -translate-y-1/2"></div>
+            <div className="fixed bottom-0 right-0 -z-10 w-[50vw] h-[50vh] bg-purple-50/50 rounded-full blur-3xl opacity-30 translate-x-1/2 translate-y-1/2"></div>
         </div>
     );
 }

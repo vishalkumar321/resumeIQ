@@ -58,10 +58,13 @@ flowchart LR
 - 🎯 **Role Analysis** — score against a target role (e.g., Full Stack Developer)
 - 📋 **JD Match** — paste a job description, get a match score + missing keywords
 - 📊 **ATS Score • Strengths • Weaknesses • Suggestions**
-- 🔒 **Auth** — email verification, forgot / reset / change password
+- 👤 **Comprehensive Profile** — avatar management, account stats, and activity tracking
+- 🔒 **Auth** — email verification, forgot / reset / change password, and Google OAuth
 - 📁 **Report History** — view, download PDF, or delete past reports
-- ⬇️ **PDF Export** — single-page formatted PDF download
+- ⬇️ **PDF Export** — single-page formatted PDF download with download tracking
+- 🔔 **Global Toast System** — real-time feedback for all user actions
 - 🛡️ **Rate Limiting** — 10 AI reports per user per day
+- 🗑️ **Danger Zone** — bulk report deletion and full account deletion with confirmation
 
 ---
 
@@ -374,6 +377,8 @@ The controller validates the response shape before any DB insert. Invalid AI out
 | GET | `/:id` | Yes | Fetch single report |
 | GET | `/:id/pdf` | Yes | Stream report as formatted PDF |
 | DELETE | `/:id` | Yes | Delete report |
+| DELETE | `/all` | Yes | Delete all reports for the user |
+| POST | `/auth/delete-account` | Yes | Permanently delete user account and data |
 
 ---
 

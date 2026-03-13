@@ -6,6 +6,7 @@ import dotenv from "dotenv";
 import authRoutes from "./routes/auth.routes.js";
 import resumeRoutes from "./routes/resume.routes.js";
 import reportRoutes from "./routes/report.routes.js";
+import trackerRoutes from "./routes/tracker.routes.js";
 
 import { generalLimiter } from "./middleware/rateLimit.middleware.js";
 import { globalErrorHandler, notFoundHandler } from "./middleware/error.middleware.js";
@@ -46,8 +47,8 @@ app.use(
 );
 
 // ── Body parsing ───────────────────────────────────────────────────────────
-app.use(express.json({ limit: "1mb" }));
-app.use(express.urlencoded({ extended: false, limit: "1mb" }));
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: false, limit: "10mb" }));
 
 // ── Global rate limiter ────────────────────────────────────────────────────
 app.use(generalLimiter);
@@ -61,6 +62,7 @@ app.get("/health", (_req, res) =>
 app.use("/api/auth", authRoutes);
 app.use("/api/resume", resumeRoutes);
 app.use("/api/report", reportRoutes);
+app.use("/api/tracker", trackerRoutes);
 
 // ── 404 + Global error handler (must be last) ─────────────────────────────
 app.use(notFoundHandler);

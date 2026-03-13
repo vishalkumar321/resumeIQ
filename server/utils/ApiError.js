@@ -3,12 +3,14 @@
  * Allows passing an HTTP status code and a descriptive message.
  */
 class ApiError extends Error {
-    constructor(statusCode, message, isOperational = true, stack = "") {
+    constructor(statusCode, message, options = {}) {
         super(message);
         this.statusCode = statusCode;
-        this.isOperational = isOperational;
-        if (stack) {
-            this.stack = stack;
+        this.isOperational = options.isOperational ?? true;
+        this.cause = options.cause;
+
+        if (options.stack) {
+            this.stack = options.stack;
         } else {
             Error.captureStackTrace(this, this.constructor);
         }
