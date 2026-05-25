@@ -163,7 +163,7 @@ export default function History() {
     // ── Render ───────────────────────────────────────────────────────────────
 
     return (
-        <div className="min-h-screen bg-gray-50 font-sans text-gray-900 pb-20 overflow-x-hidden">
+        <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-20 overflow-x-hidden">
             <Navbar />
 
             <main className="max-w-4xl mx-auto px-6 py-10 space-y-8 animate-in fade-in duration-500">
@@ -284,14 +284,26 @@ export default function History() {
                             </button>
                         </div>
                     ) : filteredAndSortedReports.length === 0 ? (
-                        <div className="bg-white border-2 border-dashed border-gray-100 rounded-[3rem] py-24 flex flex-col items-center justify-center text-center space-y-6">
-                            <span className="text-7xl">{reports.length === 0 ? "📄" : "🔍"}</span>
+                        <div className="bg-white border-2 border-dashed border-slate-200 rounded-2xl py-20 flex flex-col items-center justify-center text-center space-y-5">
+                            <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center">
+                                {reports.length === 0 ? (
+                                    <svg className="w-8 h-8 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                ) : (
+                                    <svg className="w-8 h-8 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                    </svg>
+                                )}
+                            </div>
                             <div>
-                                <h3 className="text-xl font-black text-gray-900">
+                                <h3 className="text-xl font-bold text-slate-900">
                                     {reports.length === 0 ? "No resumes yet" : "No results found"}
                                 </h3>
-                                <p className="text-sm font-bold text-gray-400 mt-1">
-                                    {reports.length === 0 ? "Upload your first resume to start tracking your ATS scores" : "Try a different filter or search term"}
+                                <p className="text-sm text-slate-500 mt-2 max-w-xs">
+                                    {reports.length === 0
+                                        ? "Upload a PDF resume on the Dashboard, choose a target role, and get your ATS score in ~30 seconds."
+                                        : "Try a different filter or clear the search."}
                                 </p>
                             </div>
                             <button
@@ -299,17 +311,19 @@ export default function History() {
                                     if (reports.length === 0) navigate("/dashboard");
                                     else { setFilter("All"); setSearchTerm(""); }
                                 }}
-                                className="bg-indigo-600 text-white font-black uppercase tracking-widest px-8 py-3 rounded-2xl shadow-lg shadow-indigo-100 text-xs"
+                                className="bg-slate-900 text-white font-semibold px-6 py-2.5 rounded-xl text-sm hover:bg-slate-700 transition"
                             >
-                                {reports.length === 0 ? "Analyze My Resume →" : "Clear Filters"}
+                                {reports.length === 0 ? "Analyze My First Resume →" : "Clear Filters"}
                             </button>
                         </div>
                     ) : (
                         paginatedReports.map(report => (
                             <div key={report.id} className="bg-white border border-gray-100 rounded-2xl p-5 md:p-6 flex flex-col md:flex-row gap-6 hover:shadow-md transition group shadow-sm border-l-4 border-l-transparent hover:border-l-indigo-600">
                                 <div className="flex items-start gap-6 flex-1 min-w-0">
-                                    <div className="w-14 h-14 bg-gray-50 rounded-2xl flex items-center justify-center text-3xl shrink-0 group-hover:scale-110 transition">
-                                        📄
+                                    <div className="w-14 h-14 bg-indigo-50 rounded-2xl flex items-center justify-center shrink-0 group-hover:scale-110 transition">
+                                        <svg className="w-7 h-7 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                        </svg>
                                     </div>
                                     <div className="flex-1 min-w-0 space-y-2">
                                         <div className="flex flex-wrap items-center gap-3">

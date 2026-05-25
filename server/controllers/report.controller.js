@@ -103,9 +103,14 @@ export const generateReport = asyncWrapper(async (req, res) => {
     suggestions: suggestions.slice(0, 5),
     job_description: job_description ?? null,
     match_score: mode === "jd" ? Math.round(Math.min(100, Math.max(0, analysis.match_score))) : null,
-    missing_keywords: mode === "jd" ? analysis.missing_keywords.slice(0, 10) : null,
+    // Store missing keywords for both 'role' (ATS analyzeResume) and 'jd' modes
+    missing_keywords: Array.isArray(analysis.missing_keywords) ? analysis.missing_keywords.slice(0, 10) : null,
     resume_text: resumeText,
   };
+
+  // We explicitly preserve formatting_issues for the API response
+  // even if it's not present in the Supabase Schema yet.
+  const formattingIssuesTemp = Array.isArray(analysis.formatting_issues) ? analysis.formatting_issues.slice(0, 5) : [];
 
   console.log("[STEP 3] Saving to Supabase with resume_text:", !!reportData.resume_text);
   let { data: report, error: dbError } = await supabase
@@ -122,6 +127,8 @@ export const generateReport = asyncWrapper(async (req, res) => {
     console.warn("[Upload] Unknown column in DB. Stripping optional fields and retrying. Run SQL migration for full functionality.");
     delete reportData.resume_text;
     delete reportData.report_name;
+    delete reportData.missing_keywords;
+    delete reportData.match_score;
     const fallback = await supabase
       .from("reports")
       .insert(reportData)
@@ -134,7 +141,7 @@ export const generateReport = asyncWrapper(async (req, res) => {
   if (dbError) {
     console.error("[Upload] Database error:", dbError);
     try {
-      fs.appendFileSync("/tmp/backend_errors.log", JSON.stringify({ timestamp: new Date(), error: dbError, reportData }) + "\n");
+      fs.appendFileSync("backend_errors.log", JSON.stringify({ timestamp: new Date(), error: dbError }) + "\n");
     } catch (e) { }
     throw new ApiError(500, "Report generated but could not be saved.");
   }
@@ -155,7 +162,14 @@ export const generateReport = asyncWrapper(async (req, res) => {
 
   // Always include resume_text and resume_url in the response so the frontend
   // (ReportOverlay) can display the original PDF, even when DB columns are missing.
-  return created(res, { report: { ...report, resume_text: resumeText || null, resume_url: resumeUrl } });
+  return created(res, { 
+    report: { 
+      ...report, 
+      resume_text: resumeText || null, 
+      resume_url: resumeUrl,
+      formatting_issues: formattingIssuesTemp 
+    } 
+  });
 });
 
 // ── GET /api/report/history ────────────────────────────────────────────────

@@ -14,9 +14,12 @@ const Dashboard = lazy(() => import("./pages/Dashboard"));
 const History = lazy(() => import("./pages/History"));
 const ReportDetail = lazy(() => import("./pages/ReportDetail"));
 const Profile = lazy(() => import("./pages/Profile"));
+const Settings = lazy(() => import("./pages/Settings"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const JobMatch = lazy(() => import("./pages/JobMatch"));
+const ResumeRewriter = lazy(() => import("./pages/ResumeRewriter"));
 
 const PageLoader = () => (
   <div className="min-h-screen bg-gray-50 flex items-center justify-center p-12">
@@ -42,8 +45,10 @@ ReactDOM.createRoot(document.getElementById("root")).render(
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/history" element={<ProtectedRoute><History /></ProtectedRoute>} />
             <Route path="/report/:id" element={<ProtectedRoute><ReportDetail /></ProtectedRoute>} />
+            <Route path="/job-match" element={<ProtectedRoute><JobMatch /></ProtectedRoute>} />
+            <Route path="/ai-rewrite" element={<ProtectedRoute><ResumeRewriter /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-            <Route path="/settings" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+            <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
 
             <Route path="*" element={<NotFound />} />
           </Routes>

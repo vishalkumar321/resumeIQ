@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import api from "../services/api";
 import ScoreBadge from "./ScoreBadge";
 import { Link, useNavigate } from "react-router-dom";
+import { useToast } from "./Toast";
 
 // Cleans CamelCase and normalizes capitalization in candidate names.
 const cleanName = (name) => {
@@ -17,9 +18,9 @@ const cleanName = (name) => {
 
 export default function ReportOverlay({ report: initialReport, onClose }) {
     const navigate = useNavigate();
+    const { showToast } = useToast();
     const [report, setReport] = useState(initialReport);
     const [screen, setScreen] = useState(1); // 1: Analysis, 2: Optimizer Loading, 3: Comparison, 4: Jobs
-    const [loadingStep, setLoadingStep] = useState(0);
     const [jobs, setJobs] = useState([]);
     const [loadingJobs, setLoadingJobs] = useState(false);
     const [downloading, setDownloading] = useState(false);
@@ -67,23 +68,14 @@ export default function ReportOverlay({ report: initialReport, onClose }) {
 
         setScreen(2);
 
-        let step = 0;
-        const interval = setInterval(() => {
-            step++;
-            if (step <= 4) setLoadingStep(step);
-        }, 1500);
-
         try {
             const role = report.role || "Software Engineer";
             const res = await api.post(`/report/rewrite/${report.id}`, { targetRole: role });
             const optimized = res.data.data.optimized;
             setReport(prev => ({ ...prev, optimized_resume: optimized }));
-            clearInterval(interval);
-            setLoadingStep(5);
-            setTimeout(() => setScreen(3), 500);
+            setScreen(3);
         } catch (err) {
-            clearInterval(interval);
-            alert("Optimization failed. Please try again.");
+            showToast("Optimization failed. Please try again.", "error");
             setScreen(1);
         }
     };
@@ -117,9 +109,10 @@ export default function ReportOverlay({ report: initialReport, onClose }) {
             link.click();
             document.body.removeChild(link);
             window.URL.revokeObjectURL(url);
+            showToast("PDF downloaded successfully!", "success");
         } catch (err) {
             console.error("Download failed:", err);
-            alert("Failed to download PDF. Please try again.");
+            showToast("Failed to download PDF. Please try again.", "error");
         } finally {
             setDownloading(false);
         }
@@ -157,6 +150,35 @@ export default function ReportOverlay({ report: initialReport, onClose }) {
         <div className="fixed inset-0 z-50 bg-slate-100/50 backdrop-blur-sm flex flex-col animate-in slide-in-from-bottom-full duration-500 overflow-hidden">
             <div className="bg-white flex-1 flex flex-col shadow-2xl relative w-full h-full overflow-hidden">
                 {renderTopBar()}
+
+                {/* Step indicator */}
+                <div className="flex items-center px-6 py-2.5 bg-slate-50 border-b border-slate-100 gap-0">
+                    {[
+                        { n: 1, label: "Analysis", screens: [1] },
+                        { n: 2, label: "Optimize", screens: [2, 3] },
+                        { n: 3, label: "Find Jobs", screens: [4] },
+                    ].map((step, i) => {
+                        const isActive = step.screens.includes(screen);
+                        const isDone = (screen > Math.max(...step.screens));
+                        return (
+                            <div key={step.n} className="flex items-center">
+                                <div className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full transition-colors ${
+                                    isActive ? "bg-slate-900 text-white" :
+                                    isDone ? "text-slate-500" : "text-slate-400"
+                                }`}>
+                                    <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold ${
+                                        isActive ? "bg-white text-slate-900" :
+                                        isDone ? "bg-indigo-100 text-indigo-600" : "bg-slate-200 text-slate-400"
+                                    }`}>
+                                        {isDone ? "✓" : step.n}
+                                    </span>
+                                    {step.label}
+                                </div>
+                                {i < 2 && <div className="w-8 h-px bg-slate-200 mx-1" />}
+                            </div>
+                        );
+                    })}
+                </div>
 
                 <div className="flex-1 overflow-y-auto pb-32 no-scrollbar">
 
@@ -253,24 +275,18 @@ export default function ReportOverlay({ report: initialReport, onClose }) {
                         </div>
                     )}
 
-                    {/* SCREEN 2: Loading State */}
+                    {/* SCREEN 2: Loading State — honest spinner */}
                     {screen === 2 && (
                         <div className="flex flex-col items-center justify-center h-full min-h-[500px] animate-in fade-in duration-500">
-                            <div className="w-full max-w-md space-y-6">
-                                {[
-                                    { s: 0, text: "Reading your resume..." },
-                                    { s: 1, text: "Identifying weak sections..." },
-                                    { s: 2, text: "Rewriting with AI..." },
-                                    { s: 3, text: "Adding keywords..." },
-                                    { s: 4, text: "Calculating new score..." }
-                                ].map((step, idx) => (
-                                    <div key={idx} className={`flex items-center gap-4 text-lg font-semibold transition-all duration-500 ${loadingStep >= step.s ? "text-slate-900 drop-shadow-sm" : "text-slate-300"}`}>
-                                        <div className={`w-6 h-6 rounded-full flex items-center justify-center border-2 transition-all duration-500 shadow-sm ${loadingStep > step.s ? "bg-indigo-600 border-indigo-600" : loadingStep === step.s ? "border-indigo-600 animate-pulse bg-indigo-50" : "border-slate-200 bg-transparent"}`}>
-                                            {loadingStep > step.s && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={4}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
-                                        </div>
-                                        {step.text}
-                                    </div>
-                                ))}
+                            <div className="flex flex-col items-center gap-6 text-center max-w-sm">
+                                <div className="w-16 h-16 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin" />
+                                <div className="space-y-2">
+                                    <p className="text-xl font-bold text-slate-800">Optimizing your resume...</p>
+                                    <p className="text-sm text-slate-500">AI is rewriting every section to improve your ATS score.</p>
+                                    <p className="text-xs text-slate-400 mt-4 bg-slate-50 px-4 py-2 rounded-lg border border-slate-100">
+                                        This takes 20–40 seconds — please don't close this tab.
+                                    </p>
+                                </div>
                             </div>
                         </div>
                     )}

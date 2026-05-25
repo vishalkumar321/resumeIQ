@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../services/supabase";
 import { PasswordStrengthIndicator, isPasswordStrong } from "../utils/passwordRules.jsx";
+import Navbar from "../components/Navbar";
 
 export default function Settings() {
     const navigate = useNavigate();
@@ -70,27 +71,8 @@ export default function Settings() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50">
-            {/* Navbar */}
-            <nav className="bg-white border-b px-6 py-4 flex items-center justify-between shadow-sm">
-                <button
-                    onClick={() => navigate("/")}
-                    className="text-xl font-bold tracking-tight text-gray-900 hover:opacity-80 transition"
-                >
-                    Resume<span className="text-indigo-600">IQ</span>
-                </button>
-                <div className="flex items-center gap-4">
-                    <button onClick={() => navigate("/")} className="text-sm text-gray-500 hover:text-gray-800 transition">
-                        ← Dashboard
-                    </button>
-                    <button
-                        onClick={handleLogout}
-                        className="text-sm bg-red-50 text-red-600 border border-red-200 px-4 py-1.5 rounded-lg hover:bg-red-100 transition"
-                    >
-                        Logout
-                    </button>
-                </div>
-            </nav>
+        <div className="min-h-screen bg-slate-50">
+            <Navbar />
 
             <main className="max-w-lg mx-auto px-4 py-10 space-y-8">
                 <div>

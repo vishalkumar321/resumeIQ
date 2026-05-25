@@ -7,6 +7,8 @@ import authRoutes from "./routes/auth.routes.js";
 import resumeRoutes from "./routes/resume.routes.js";
 import reportRoutes from "./routes/report.routes.js";
 import trackerRoutes from "./routes/tracker.routes.js";
+import jobRoutes from "./routes/job.routes.js";
+import aiRoutes from "./routes/ai.routes.js";
 
 import { generalLimiter } from "./middleware/rateLimit.middleware.js";
 import { globalErrorHandler, notFoundHandler } from "./middleware/error.middleware.js";
@@ -63,6 +65,8 @@ app.use("/api/auth", authRoutes);
 app.use("/api/resume", resumeRoutes);
 app.use("/api/report", reportRoutes);
 app.use("/api/tracker", trackerRoutes);
+app.use("/api/job", jobRoutes);
+app.use("/api/ai", aiRoutes);
 
 // ── 404 + Global error handler (must be last) ─────────────────────────────
 app.use(notFoundHandler);

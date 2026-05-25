@@ -6,6 +6,7 @@ import Navbar from "../components/Navbar";
 import ScoreBadge from "../components/ScoreBadge";
 import Skeleton from "../components/Skeleton";
 import ReportOverlay from "../components/ReportOverlay";
+import { useToast } from "../components/Toast";
 
 // ── Components ──────────────────────────────────────────────────────────────
 
@@ -117,6 +118,8 @@ export default function Dashboard() {
         "User";
 
 
+    const { showToast } = useToast();
+
     // Dashboard Data State
     const [reports, setReports] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -137,6 +140,7 @@ export default function Dashboard() {
     const TRACKER_COLS = ["saved", "applied", "interviewing", "offer", "rejected"];
     const TRACKER_LABELS = { saved: "Saved", applied: "Applied", interviewing: "Interviewing", offer: "Offer 🎉", rejected: "Rejected" };
     const TRACKER_BORDERS = { saved: "border-t-2 border-slate-400", applied: "border-t-2 border-blue-400", interviewing: "border-t-2 border-indigo-500", offer: "border-t-2 border-green-500", rejected: "border-t-2 border-red-400" };
+    const TRACKER_STATUS_COLORS = { saved: "bg-slate-100 text-slate-600", applied: "bg-blue-50 text-blue-700", interviewing: "bg-indigo-50 text-indigo-700", offer: "bg-green-50 text-green-700", rejected: "bg-red-50 text-red-600", withdrawn: "bg-amber-50 text-amber-700" };
 
     // Upload/Analyze State
     const [file, setFile] = useState(null);
@@ -146,6 +150,7 @@ export default function Dashboard() {
     const [showRoleDropdown, setShowRoleDropdown] = useState(false);
     const [roleSearchQuery, setRoleSearchQuery] = useState("");
     const [analyzing, setAnalyzing] = useState(false);
+    const [analyzeStage, setAnalyzeStage] = useState(0); // 0=idle 1=uploading 2=analyzing 3=saving
     const [uploadError, setUploadError] = useState("");
     const [isDragging, setIsDragging] = useState(false);
 
@@ -153,6 +158,14 @@ export default function Dashboard() {
     const [generatedReport, setGeneratedReport] = useState(null);
 
     const dropdownRef = useRef(null);
+
+    // Stage labels shown during analysis
+    const STAGE_LABELS = [
+        null,
+        "Uploading your resume...",
+        "AI is reading and scoring your resume...",
+        "Saving your results...",
+    ];
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -256,6 +269,7 @@ export default function Dashboard() {
     const handleAnalyze = async () => {
         if (isAnalyzeDisabled()) return;
         setAnalyzing(true);
+        setAnalyzeStage(1); // Stage 1: Uploading
         setUploadError("");
 
         try {
@@ -266,6 +280,8 @@ export default function Dashboard() {
             });
             const resumeId = uploadRes.data.data.resume.id;
 
+            setAnalyzeStage(2); // Stage 2: AI analyzing
+
             const payload = {
                 resume_id: resumeId,
                 mode: analysisType
@@ -274,11 +290,12 @@ export default function Dashboard() {
             if (analysisType === "role") {
                 payload.role = targetRole;
             } else {
-                // Pad to 100 chars if user pastes a very short JD, since backend requires >=100 logic
                 payload.job_description = jobDescription.length < 100 ? jobDescription.padEnd(100, " ") : jobDescription;
             }
 
             const analyzeRes = await api.post("/report/generate", payload);
+
+            setAnalyzeStage(3); // Stage 3: Saving
 
             // Show full screen overlay instead of navigating
             setGeneratedReport(analyzeRes.data.data.report);
@@ -297,6 +314,7 @@ export default function Dashboard() {
             setUploadError(err.response?.data?.error || "Analysis failed. Please try again.");
         } finally {
             setAnalyzing(false);
+            setAnalyzeStage(0);
         }
     };
 
@@ -318,13 +336,15 @@ export default function Dashboard() {
         try {
             if (editTrackerApp) {
                 await api.patch(`/tracker/${editTrackerApp.id}`, trackerForm);
+                showToast("Application updated!", "success");
             } else {
                 await api.post("/tracker", trackerForm);
+                showToast("Application added!", "success");
             }
             setShowTrackerAdd(false);
             await refreshTracker();
         } catch (err) {
-            alert(err.response?.data?.error || "Failed to save application");
+            showToast(err.response?.data?.error || "Failed to save application. Please try again.", "error");
         }
         setSavingTracker(false);
     };
@@ -334,9 +354,10 @@ export default function Dashboard() {
         try {
             await api.delete(`/tracker/${deleteTrackerId}`);
             setDeleteTrackerId(null);
+            showToast("Application removed.", "info");
             await refreshTracker();
         } catch {
-            alert("Failed to delete application");
+            showToast("Failed to delete application. Please try again.", "error");
         }
     };
 
@@ -385,32 +406,33 @@ export default function Dashboard() {
                     <StatCard title="Applications Tracked" value={stats.tracked} color="border-t-2 border-t-purple-400" delay="300ms" loading={loading} />
                 </section>
 
-                <section className="bg-slate-900 rounded-xl px-6 py-4 shadow-sm w-full overflow-hidden">
-                    <div className="overflow-x-auto whitespace-nowrap no-scrollbar pb-1">
-                        <div className="flex items-center gap-4 text-sm font-medium text-white min-w-max mx-auto justify-center">
-                            <span className="flex items-center gap-1.5"><span className="text-indigo-400">✦</span> AI Resume Rewriter</span>
-                            <span className="text-slate-600">|</span>
-                            <span className="flex items-center gap-1.5"><span className="text-indigo-400">✦</span> ATS Score Analysis</span>
-                            <span className="text-slate-600">|</span>
-                            <span className="flex items-center gap-1.5"><span className="text-indigo-400">✦</span> Before & After Comparison</span>
-                            <span className="text-slate-600">|</span>
-                            <span className="flex items-center gap-1.5"><span className="text-indigo-400">✦</span> PDF Download</span>
-                            <span className="text-slate-600">|</span>
-                            <span className="flex items-center gap-1.5"><span className="text-indigo-400">✦</span> Job Recommendations</span>
-                            <span className="text-slate-600">|</span>
-                            <span className="flex items-center gap-1.5"><span className="text-indigo-400">✦</span> Career Pulse Charts</span>
-                        </div>
-                    </div>
-                    <p className="text-slate-400 text-xs text-center mt-2.5">
-                        All included — upload a resume to unlock everything
-                    </p>
-                </section>
+
 
                 <section className="flex justify-center">
                     <div className="w-full max-w-2xl bg-white border border-slate-200 rounded-2xl shadow-sm p-10 space-y-8">
+
+                        {/* Onboarding banner — shown only to new users with no reports */}
+                        {!loading && reports.length === 0 && (
+                            <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-5 space-y-3">
+                                <p className="text-sm font-bold text-indigo-900">👋 Welcome to ResumeIQ! Here's how it works:</p>
+                                <div className="space-y-2">
+                                    {[
+                                        "Upload your PDF resume below",
+                                        "Choose a target role or paste a job description",
+                                        "Get your ATS score + an AI-optimized version in ~30 seconds",
+                                    ].map((step, i) => (
+                                        <div key={i} className="flex items-start gap-3">
+                                            <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{i + 1}</span>
+                                            <span className="text-sm text-indigo-800">{step}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
                         <div className="text-center">
                             <h3 className="text-xl font-bold text-[#0f172a] mb-2 tracking-tight">Analyze a New Resume</h3>
-                            <p className="text-slate-500 font-medium text-sm">Upload your PDF resume and get your ATS score in seconds.</p>
+                            <p className="text-slate-500 font-medium text-sm">Upload your PDF and we'll score it, find gaps, and rewrite it for your target role.</p>
                         </div>
 
                         {/* STEP 1 & 2: File Drop & Options */}
@@ -621,22 +643,31 @@ export default function Dashboard() {
                                 }`}
                         >
                             {analyzing ? (
-                                <>
-                                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                                    <span>Analyzing your resume...</span>
-                                </>
+                                <div className="w-full space-y-2 py-0.5">
+                                    <div className="flex items-center justify-between text-sm">
+                                        <span className="font-medium text-white/90">{STAGE_LABELS[analyzeStage] || "Processing..."}</span>
+                                        <span className="text-xs text-white/60">Step {analyzeStage} of 3</span>
+                                    </div>
+                                    <div className="w-full h-1.5 bg-white/20 rounded-full overflow-hidden">
+                                        <div
+                                            className="h-full bg-white rounded-full transition-all duration-700 ease-out"
+                                            style={{ width: `${Math.round((analyzeStage / 3) * 100)}%` }}
+                                        />
+                                    </div>
+                                </div>
                             ) : (
-                                <span>Analyze Resume</span>
+                                <span>Analyze Resume →</span>
                             )}
                         </button>
                     </div>
                 </section>
 
+                {/* Recent Reports — moved above tracker for better priority */}
                 <section className="space-y-6">
                     <div className="flex items-center justify-between">
                         <h3 className="text-xl font-bold text-[#0f172a] tracking-tight">Recent Reports</h3>
                         <Link to="/history" className="text-sm font-semibold text-indigo-600 hover:text-indigo-700 transition">
-                            View All
+                            View All →
                         </Link>
                     </div>
 
@@ -692,8 +723,38 @@ export default function Dashboard() {
                         </div>
                     )}
 
-                    {/* Kanban */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                    {/* Mobile: list view (readable on small screens) */}
+                    <div className="block md:hidden space-y-3">
+                        {trackerApps.length === 0 ? (
+                            <div className="text-center py-8 text-sm text-slate-400">
+                                No applications yet. Click "+ Add Application" to track your first one.
+                            </div>
+                        ) : (
+                            trackerApps.map(app => (
+                                <div key={app.id} className="bg-white border border-slate-200 rounded-xl p-4 flex items-center justify-between gap-3">
+                                    <div className="min-w-0 flex-1">
+                                        <p className="font-semibold text-slate-800 text-sm truncate">{app.company_name}</p>
+                                        <p className="text-xs text-slate-500 truncate">{app.role_title}</p>
+                                        <p className="text-[10px] text-slate-400 mt-0.5">{app.date_applied}</p>
+                                    </div>
+                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                        <span className={`text-xs font-bold px-2.5 py-1 rounded-full capitalize ${TRACKER_STATUS_COLORS[app.status] || "bg-slate-100 text-slate-600"}`}>
+                                            {app.status}
+                                        </span>
+                                        <button
+                                            onClick={() => { setTrackerForm({ company_name: app.company_name, role_title: app.role_title, job_url: app.job_url || "", status: app.status, date_applied: app.date_applied || "", notes: app.notes || "", report_id: app.report_id || "" }); setEditTrackerApp(app); setShowTrackerAdd(true); }}
+                                            className="text-slate-400 hover:text-slate-600 p-1"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+
+                    {/* Desktop: Kanban board */}
+                    <div className="hidden md:grid md:grid-cols-5 gap-4">
                         {TRACKER_COLS.map(status => (
                             <div key={status} className={`bg-slate-50 rounded-xl p-3 min-h-60 border border-slate-200 ${TRACKER_BORDERS[status]}`}>
                                 <div className="flex items-center justify-between mb-3">
@@ -711,28 +772,22 @@ export default function Dashboard() {
                                                 <p className="text-xs text-slate-500 truncate">{app.role_title}</p>
                                                 <p className="text-[10px] text-slate-400 mt-1">{app.date_applied}</p>
                                             </div>
-
                                             <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-50">
                                                 {app.job_url && (
-                                                    <a href={app.job_url} target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold text-indigo-600 hover:text-indigo-700">
-                                                        Link ↗
-                                                    </a>
+                                                    <a href={app.job_url} target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold text-indigo-600 hover:text-indigo-700">Link ↗</a>
                                                 )}
                                                 {app.report_id && (
-                                                    <Link to={`/report/${app.report_id}`} className="text-[10px] font-bold text-slate-500 hover:text-slate-900 ml-auto">
-                                                        Resume
-                                                    </Link>
+                                                    <Link to={`/report/${app.report_id}`} className="text-[10px] font-bold text-slate-500 hover:text-slate-900 ml-auto">Resume</Link>
                                                 )}
                                             </div>
-
-                                            <div className="absolute top-2 right-2 flex items-center gap-1">
+                                            <div className="absolute top-2 right-2">
                                                 <button className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-slate-600 transition-opacity" onClick={() => setTrackerMenuOpen(trackerMenuOpen === app.id ? null : app.id)}>
                                                     <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 8a2 2 0 100-4 2 2 0 000 4zm0 6a2 2 0 100-4 2 2 0 000 4zm0 6a2 2 0 100-4 2 2 0 000 4z" /></svg>
                                                 </button>
                                                 {trackerMenuOpen === app.id && (
                                                     <>
                                                         <div className="fixed inset-0 z-10" onClick={() => setTrackerMenuOpen(null)} />
-                                                        <div className="absolute right-0 top-5 w-28 bg-white border border-slate-200 rounded-lg shadow-xl py-1 z-20 animate-in fade-in slide-in-from-top-1 duration-200">
+                                                        <div className="absolute right-0 top-5 w-28 bg-white border border-slate-200 rounded-lg shadow-xl py-1 z-20">
                                                             <button className="w-full text-left px-3 py-1.5 text-[10px] font-bold hover:bg-slate-50 text-slate-700" onClick={() => { setTrackerForm({ company_name: app.company_name, role_title: app.role_title, job_url: app.job_url || "", status: app.status, date_applied: app.date_applied || "", notes: app.notes || "", report_id: app.report_id || "" }); setEditTrackerApp(app); setShowTrackerAdd(true); setTrackerMenuOpen(null); }}>Edit</button>
                                                             <button className="w-full text-left px-3 py-1.5 text-[10px] font-bold hover:bg-red-50 text-red-600" onClick={() => { setDeleteTrackerId(app.id); setTrackerMenuOpen(null); }}>Delete</button>
                                                         </div>

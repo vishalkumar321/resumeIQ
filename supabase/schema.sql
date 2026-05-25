@@ -159,3 +159,66 @@ CREATE POLICY "storage:resumes:delete_own" ON storage.objects
 -- SELECT policyname, tablename FROM pg_policies WHERE schemaname IN ('public','storage');
 -- SELECT id, name, public FROM storage.buckets WHERE id = 'resumes';
 -- ─────────────────────────────────────────────────────────────────────────────
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- STEP 6: jobs table
+-- Stores target job descriptions that users want to match against their resumes.
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE public.jobs (
+    id           UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id      UUID        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    title        TEXT        NOT NULL,
+    description  TEXT        NOT NULL,
+    source       TEXT        DEFAULT 'manual', -- manual, linkedin, etc.
+    created_at   TIMESTAMPTZ DEFAULT NOW() NOT NULL
+);
+
+-- Enable Row Level Security
+ALTER TABLE public.jobs ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "jobs:insert_own" ON public.jobs
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "jobs:select_own" ON public.jobs
+    FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "jobs:delete_own" ON public.jobs
+    FOR DELETE USING (auth.uid() = user_id);
+
+CREATE POLICY "jobs:update_own" ON public.jobs
+    FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE INDEX idx_jobs_user_id ON public.jobs(user_id);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- STEP 7: matches table
+-- Stores the AI matching results between a user's resume and a specific job.
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE public.matches (
+    id              UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id         UUID        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    resume_id       UUID        NOT NULL REFERENCES public.resumes(id) ON DELETE CASCADE,
+    job_id          UUID        NOT NULL REFERENCES public.jobs(id) ON DELETE CASCADE,
+    match_score     INTEGER     NOT NULL CHECK (match_score BETWEEN 0 AND 100),
+    missing_skills  JSONB       DEFAULT '[]'::jsonb,
+    strengths       JSONB       DEFAULT '[]'::jsonb,
+    weaknesses      JSONB       DEFAULT '[]'::jsonb,
+    suggestions     JSONB       DEFAULT '[]'::jsonb,
+    created_at      TIMESTAMPTZ DEFAULT NOW() NOT NULL
+);
+
+-- Enable Row Level Security
+ALTER TABLE public.matches ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "matches:insert_own" ON public.matches
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "matches:select_own" ON public.matches
+    FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "matches:delete_own" ON public.matches
+    FOR DELETE USING (auth.uid() = user_id);
+
+CREATE INDEX idx_matches_user_id ON public.matches(user_id);
+CREATE INDEX idx_matches_resume_id ON public.matches(resume_id);
+CREATE INDEX idx_matches_job_id ON public.matches(job_id);

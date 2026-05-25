@@ -274,13 +274,13 @@ export default function Profile() {
     const memberSince = new Date(user?.created_at).toLocaleDateString("en-US", { month: 'long', year: 'numeric' });
 
     return (
-        <div className="min-h-screen bg-gray-50">
+        <div className="min-h-screen bg-slate-50">
             <Navbar />
 
             <main className="max-w-4xl mx-auto px-6 py-12 space-y-8">
 
                 {/* ── SECTION 2: PROFILE HEADER CARD ────────────────────────────── */}
-                <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8 md:p-10 flex flex-col md:flex-row items-center gap-8 relative overflow-hidden">
+                <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 md:p-10 flex flex-col md:flex-row items-center gap-8 relative overflow-hidden">
                     <div className="relative group">
                         <div
                             onClick={handleAvatarClick}
@@ -336,9 +336,9 @@ export default function Profile() {
                             </div>
                         ) : (
                             <>
-                                <h1 className="text-3xl font-black text-gray-900 tracking-tight">{fullName || "Set Your Name"}</h1>
-                                <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">{user?.email}</p>
-                                <p className="text-xs font-bold text-gray-400 mt-2 italic">Member since {memberSince}</p>
+                                <h1 className="text-3xl font-black text-slate-900 tracking-tight">{fullName || "Set Your Name"}</h1>
+                                <p className="text-sm font-bold text-slate-500 uppercase tracking-widest">{user?.email}</p>
+                                <p className="text-xs font-bold text-slate-400 mt-2 italic">Member since {memberSince}</p>
                             </>
                         )}
                     </div>
@@ -355,33 +355,33 @@ export default function Profile() {
 
                 {/* ── SECTION 3: STATS CARDS ROW ────────────────────────────── */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                    <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm border-l-4 border-l-indigo-600">
+                    <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm border-l-4 border-l-indigo-600">
                         <span className="text-2xl mb-2 block">📄</span>
-                        <div className="text-3xl font-black text-gray-900">{stats.total}</div>
-                        <div className="text-[10px] font-black uppercase tracking-widest text-gray-400 mt-1">Resumes Analyzed</div>
+                        <div className="text-3xl font-black text-slate-900">{stats.total}</div>
+                        <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 mt-1">Resumes Analyzed</div>
                     </div>
-                    <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm border-l-4 border-l-green-600">
+                    <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm border-l-4 border-l-green-600">
                         <span className="text-2xl mb-2 block">⚡</span>
                         <div className={`text-3xl font-black ${stats.best >= 80 ? "text-green-600" : stats.best >= 60 ? "text-amber-600" : "text-red-600"}`}>
                             {stats.total > 0 ? stats.best : "—"}
                         </div>
-                        <div className="text-[10px] font-black uppercase tracking-widest text-gray-400 mt-1">Best ATS Score</div>
+                        <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 mt-1">Best ATS Score</div>
                     </div>
-                    <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm border-l-4 border-l-purple-600">
+                    <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm border-l-4 border-l-purple-600">
                         <span className="text-2xl mb-2 block">🔁</span>
-                        <div className="text-3xl font-black text-gray-900">{stats.optimized}</div>
-                        <div className="text-[10px] font-black uppercase tracking-widest text-gray-400 mt-1">Resumes Optimized</div>
+                        <div className="text-3xl font-black text-slate-900">{stats.optimized}</div>
+                        <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 mt-1">Resumes Optimized</div>
                     </div>
-                    <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm border-l-4 border-l-blue-600">
+                    <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm border-l-4 border-l-blue-600">
                         <span className="text-2xl mb-2 block">📅</span>
-                        <div className="text-3xl font-black text-gray-900">{stats.memberLabel}</div>
-                        <div className="text-[10px] font-black uppercase tracking-widest text-gray-400 mt-1">Member For</div>
+                        <div className="text-3xl font-black text-slate-900">{stats.memberLabel}</div>
+                        <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 mt-1">Member For</div>
                     </div>
                 </div>
 
                 {/* ── SECTION 4: ACCOUNT SETTINGS ────────────────────────────── */}
-                <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8 space-y-8">
-                    <h2 className="text-xl font-black text-gray-900 tracking-tight uppercase">Account Settings</h2>
+                <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 space-y-8">
+                    <h2 className="text-xl font-black text-slate-900 tracking-tight uppercase">Account Settings</h2>
 
                     <div className="space-y-6">
                         {/* Row 1: Password */}

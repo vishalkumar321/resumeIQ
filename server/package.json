@@ -5,7 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "NODE_OPTIONS='--dns-result-order=ipv4first' nodemon server.js"
+    "dev": "nodemon server.js"
   },
   "keywords": [],
   "author": "",
@@ -15,6 +15,7 @@
     "@supabase/supabase-js": "^2.97.0",
     "axios": "^1.13.6",
     "cheerio": "^1.2.0",
+    "compression": "^1.8.1",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
@@ -23,6 +24,7 @@
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.0.2",
+    "node-cache": "^5.1.2",
     "pdf-parse": "^1.1.1",
     "pdfkit": "^0.17.2",
     "puppeteer": "^24.39.0",

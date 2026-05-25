@@ -1,37 +1,51 @@
+import { z } from "zod";
+
 /**
- * Zod v4-compatible validation middleware factory.
- * Uses error.flatten() which is stable across Zod versions.
+ * Validation Middleware
+ * Use Zod schemas to validate request bodies/params.
  */
+
 export const validate = (schema) => (req, res, next) => {
-    const result = schema.safeParse(req.body);
-
-    if (!result.success) {
-        // Zod v4: use flatten() for reliable field-level errors
-        const flat = result.error.flatten();
-        const fields = [];
-
-        // Form-level errors (e.g. superRefine errors with no path)
-        for (const msg of flat.formErrors ?? []) {
-            fields.push({ field: "_form", message: msg });
-        }
-
-        // Field-level errors
-        for (const [fieldName, messages] of Object.entries(flat.fieldErrors ?? {})) {
-            for (const msg of messages ?? []) {
-                fields.push({ field: fieldName, message: msg });
-            }
-        }
-
-        return res.status(422).json({
-            success: false,
-            error: {
-                code: "VALIDATION_ERROR",
-                message: "Request validation failed.",
-                fields,
-            },
-        });
-    }
-
-    req.validated = result.data;
+  try {
+    req.validated = schema.parse({
+      body: req.body,
+      query: req.query,
+      params: req.params,
+    }).body;
     next();
+  } catch (error) {
+    return res.status(400).json({
+      success: false,
+      error: "Validation failed",
+      details: error.errors.map((e) => ({
+        path: e.path.join("."),
+        message: e.message,
+      })),
+    });
+  }
 };
+
+// ── Common Schemas ─────────────────────────────────────────────────────────
+
+export const JobMatchSchema = z.object({
+  body: z.object({
+    resumeId: z.string().uuid("Invalid resume ID"),
+    jobDescription: z.string().min(50, "Job description must be at least 50 characters"),
+    jobTitle: z.string().optional(),
+    jobSource: z.string().optional(),
+  }),
+});
+
+export const ResumeRewriteSchema = z.object({
+  body: z.object({
+    resumeText: z.string().min(100, "Resume text is too short"),
+    targetRole: z.string().min(2, "Target role is required"),
+  }),
+});
+
+export const AnalyzeResumeSchema = z.object({
+  body: z.object({
+    resumeText: z.string().min(100, "Resume text is too short"),
+    role: z.string().min(2, "Role is required"),
+  }),
+});

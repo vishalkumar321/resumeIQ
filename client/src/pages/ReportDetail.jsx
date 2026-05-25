@@ -31,6 +31,24 @@ const Badge = ({ children, color = "indigo" }) => {
     );
 };
 
+const CircularScore = ({ score }) => {
+    const normalizedScore = score || 0;
+    const radius = 38;
+    const circumference = 2 * Math.PI * radius;
+    const strokeDashoffset = circumference - (normalizedScore / 100) * circumference;
+    const color = normalizedScore >= 80 ? "#16a34a" : normalizedScore >= 60 ? "#d97706" : "#dc2626";
+    
+    return (
+        <div className="relative w-24 h-24 flex flex-col items-center justify-center drop-shadow-sm">
+            <svg className="absolute w-full h-full transform -rotate-90 overflow-visible" viewBox="0 0 96 96">
+                <circle cx="48" cy="48" r={radius} stroke="#f1f5f9" strokeWidth="6" fill="none" />
+                <circle cx="48" cy="48" r={radius} stroke={color} strokeWidth="6" fill="white" fillOpacity="0.5" strokeDasharray={circumference} strokeDashoffset={strokeDashoffset} strokeLinecap="round" className="transition-all duration-1000 ease-out" />
+            </svg>
+            <span className="text-3xl font-extrabold text-slate-800 relative z-10">{normalizedScore}</span>
+        </div>
+    );
+};
+
 // ── Main Page ──────────────────────────────────────────────────────────────
 
 // Cleans CamelCase and normalizes capitalization in candidate names.
@@ -262,10 +280,8 @@ export default function ReportDetail() {
                         </p>
                     </div>
                     <div className="flex flex-col items-center gap-2">
-                        <div className="w-24 h-24 rounded-full border border-slate-200 flex items-center justify-center bg-white shadow-sm">
-                            <span className="text-3xl font-light text-[#0f172a]">{report.score}</span>
-                        </div>
-                        <span className="text-slate-500 font-semibold text-xs uppercase tracking-widest">ATS Score</span>
+                        <CircularScore score={report.score} />
+                        <span className="text-slate-500 font-semibold text-xs uppercase tracking-widest mt-1">ATS Score</span>
                     </div>
                 </div>
             </header>
@@ -404,6 +420,23 @@ export default function ReportDetail() {
                                 )}
                             </div>
                         </Card>
+
+                        {report.formatting_issues && report.formatting_issues.length > 0 && (
+                            <Card className="border-rose-100 bg-rose-50/30">
+                                <h3 className="text-sm font-semibold text-rose-900 mb-4 flex items-center gap-2">
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                                    Formatting Issues
+                                </h3>
+                                <ul className="space-y-4">
+                                    {report.formatting_issues.map((issue, i) => (
+                                        <li key={i} className="flex items-start gap-3">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-rose-500 mt-2 shrink-0" />
+                                            <span className="text-sm text-rose-800">{issue}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </Card>
+                        )}
 
                         <Card className="relative overflow-hidden">
                             <div className="mb-6">
